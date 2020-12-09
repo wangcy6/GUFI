@@ -89,33 +89,53 @@ OF SUCH DAMAGE.
 #include "OutputBuffers.h"
 #include "utils.h"
 
-void buffered_print(struct OutputBuffers * outbufs, const size_t id, const char * str, const size_t len) {
-    const size_t capacity = outbufs->buffers[id].capacity;
+static void buffered_print(struct OutputBuffers *obs, const size_t id,
+                           const char *str, const size_t len) {
+    if (obs) {
+        struct OutputBuffer *ob = &obs->buffers[id];
 
-    /* if the str can fit within an empty buffer, try to add the new str to the buffer */
-    if (len < capacity) {
-        /* if there's not enough space in the buffer to fit the new str, flush it first */
-        if ((outbufs->buffers[id].filled + len) >= capacity) {
-            OutputBuffer_flush(&outbufs->mutex, &outbufs->buffers[id], stdout);
+        /* if a row cannot fit the buffer for whatever reason, flush the existing bufffer */
+        if ((ob->capacity - ob->filled) < len) {
+            if (obs->mutex) {
+                pthread_mutex_lock(obs->mutex);
+            }
+            OutputBuffer_flush(ob, stdout);
+            if (obs->mutex) {
+                pthread_mutex_unlock(obs->mutex);
+            }
         }
 
-        char * buf = outbufs->buffers[id].buf;
-        size_t filled = outbufs->buffers[id].filled;
+        /* if the row is larger than the entire buffer, flush this row */
+        if (ob->capacity < len) {
+            /* the existing buffer will have been flushed a few lines ago, maintaining output order */
+            if (obs->mutex) {
+                pthread_mutex_lock(obs->mutex);
+            }
 
-        memcpy(&buf[filled], str, len);
-        filled += len;
+            fwrite(str, sizeof(char), len, stdout);
+            fwrite("\n", sizeof(char), 1, stdout);
 
-        buf[filled] = '\n';
-        filled++;
+            obs->buffers[id].count++;
+            if (obs->mutex) {
+                pthread_mutex_unlock(obs->mutex);
+            }
+        }
+        /* otherwise, the row can fit into the buffer, so buffer it */
+        /* if the old data + this row cannot fit the buffer, works since old data has been flushed */
+        /* if the old data + this row fit the buffer, old data was not flushed, but no issue */
+        else {
+            char *buf = ob->buf;
+            size_t filled = ob->filled;
 
-        outbufs->buffers[id].filled = filled;
-    }
-    else {
-        /* if the str does not fit the buffer, output immediately instead of buffering */
-        pthread_mutex_lock(&outbufs->mutex);
-        fwrite(str, sizeof(char), len, stdout);
-        fwrite("\n", sizeof(char), 1, stdout);
-        pthread_mutex_unlock(&outbufs->mutex);
+            memcpy(&buf[filled], str, len);
+            filled += len;
+
+            buf[filled] = '\n';
+            filled++;
+
+            ob->filled = filled;
+            ob->count++;
+        }
     }
 }
 
@@ -181,8 +201,9 @@ int main(int argc, char *argv[])
         return -1;
 
     /* initialize globals */
+    pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
     struct OutputBuffers outbufs;
-    if (!OutputBuffers_init(&outbufs, in.maxthreads, in.output_buffer_size)) {
+    if (!OutputBuffers_init(&outbufs, in.maxthreads, in.output_buffer_size, &print_mutex)) {
         return -1;
     }
 
@@ -232,10 +253,10 @@ int main(int argc, char *argv[])
     QPTPool_destroy(pool);
 
     /* clear out buffered data */
-    OutputBuffers_flush_single(&outbufs, in.maxthreads, stdout);
+    OutputBuffers_flush_to_single(&outbufs, stdout);
 
     /* clean up globals */
-    OutputBuffers_destroy(&outbufs, in.maxthreads);
+    OutputBuffers_destroy(&outbufs);
 
     return 0;
 }
