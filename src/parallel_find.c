@@ -84,9 +84,10 @@ OF SUCH DAMAGE.
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "OutputBuffers.h"
 #include "QueuePerThreadPool.h"
 #include "bf.h"
-#include "OutputBuffers.h"
+#include "debug.h"
 #include "utils.h"
 
 int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) {
@@ -138,8 +139,10 @@ void sub_help() {
    printf("\n");
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
+    struct start_end main_timer;
+    timestamp_start(main_timer);
+
     /* process input args - all programs share the common 'struct input', */
     /* but allow different fields to be filled at the command-line. */
     /* Callers provide the options-string for get_opt(), which will */
@@ -200,6 +203,7 @@ int main(int argc, char *argv[])
     }
 
     QPTPool_wait(pool);
+    const size_t completed = QPTPool_threads_completed(pool);
     QPTPool_destroy(pool);
 
     /* clear out buffered data */
@@ -207,6 +211,9 @@ int main(int argc, char *argv[])
 
     /* clean up globals */
     OutputBuffers_destroy(&outbufs);
+
+    timestamp_end(main_timer);
+    fprintf(stderr, "main + %zu threads (%d simultaneous threads) finished in %.2Lfs\n", completed, in.maxthreads, elapsed(&main_timer));
 
     return 0;
 }
