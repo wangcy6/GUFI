@@ -102,6 +102,7 @@ struct OutputBuffers {
 };
 
 struct OutputBuffers * OutputBuffers_init(struct OutputBuffers * obufs, const size_t count, const size_t capacity, pthread_mutex_t *global_mutex);
+size_t OutputBuffers_println(struct OutputBuffers * obufs, const int id, const void * line, const size_t size, FILE * out);
 size_t OutputBuffers_flush_to_single(struct OutputBuffers * obufs, FILE * out);
 size_t OutputBuffers_flush_to_multiple(struct OutputBuffers * obufs, FILE ** out);
 void OutputBuffers_destroy(struct OutputBuffers * obufs);

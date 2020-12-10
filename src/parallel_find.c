@@ -89,59 +89,9 @@ OF SUCH DAMAGE.
 #include "OutputBuffers.h"
 #include "utils.h"
 
-static void buffered_print(struct OutputBuffers *obs, const size_t id,
-                           const char *str, const size_t len) {
-    if (obs) {
-        struct OutputBuffer *ob = &obs->buffers[id];
-
-        /* if a row cannot fit the buffer for whatever reason, flush the existing bufffer */
-        if ((ob->capacity - ob->filled) < len) {
-            if (obs->mutex) {
-                pthread_mutex_lock(obs->mutex);
-            }
-            OutputBuffer_flush(ob, stdout);
-            if (obs->mutex) {
-                pthread_mutex_unlock(obs->mutex);
-            }
-        }
-
-        /* if the row is larger than the entire buffer, flush this row */
-        if (ob->capacity < len) {
-            /* the existing buffer will have been flushed a few lines ago, maintaining output order */
-            if (obs->mutex) {
-                pthread_mutex_lock(obs->mutex);
-            }
-
-            fwrite(str, sizeof(char), len, stdout);
-            fwrite("\n", sizeof(char), 1, stdout);
-
-            obs->buffers[id].count++;
-            if (obs->mutex) {
-                pthread_mutex_unlock(obs->mutex);
-            }
-        }
-        /* otherwise, the row can fit into the buffer, so buffer it */
-        /* if the old data + this row cannot fit the buffer, works since old data has been flushed */
-        /* if the old data + this row fit the buffer, old data was not flushed, but no issue */
-        else {
-            char *buf = ob->buf;
-            size_t filled = ob->filled;
-
-            memcpy(&buf[filled], str, len);
-            filled += len;
-
-            buf[filled] = '\n';
-            filled++;
-
-            ob->filled = filled;
-            ob->count++;
-        }
-    }
-}
-
 int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) {
     char * path = (char *) data;
-    buffered_print((struct OutputBuffers *) args, id, path, strlen(path));
+    OutputBuffers_println((struct OutputBuffers *) args, id, path, strlen(path), stdout);
 
     DIR * dir = opendir(path);
     if (!dir) {
@@ -173,7 +123,7 @@ int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) 
             QPTPool_enqueue(ctx, id, processdir, clone);
         }
         else {
-            buffered_print((struct OutputBuffers *) args, id, entry_path, entry_path_len);
+            OutputBuffers_println((struct OutputBuffers *) args, id, entry_path, entry_path_len, stdout);
         }
     }
 

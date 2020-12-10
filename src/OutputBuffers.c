@@ -81,7 +81,7 @@ struct OutputBuffer * OutputBuffer_init(struct OutputBuffer * obuf, const size_t
 }
 
 size_t OutputBuffer_write(struct OutputBuffer * obuf, const void * buf, const size_t size, const int increment_count) {
-    if ((obuf->filled + size) > obuf->capacity) {
+    if ((obuf->capacity - obuf->filled) < size) {
         return 0;
     }
 
@@ -130,6 +130,70 @@ struct OutputBuffers * OutputBuffers_init(struct OutputBuffers * obufs, const si
     }
 
     return obufs;
+}
+
+size_t OutputBuffers_println(struct OutputBuffers * obufs, const int id, const void * line, const size_t size, FILE * out) {
+    /* if (!obufs) { */
+    /*     return 0; */
+    /* } */
+
+    /* if (!line) { */
+    /*     return 0; */
+    /* } */
+
+    struct OutputBuffer * obuf = &obufs->buffers[id];
+
+    /* if (!obuf) { */
+    /*     return 0; */
+    /* } */
+
+    const size_t final_size = size + 1;
+    size_t octets = 0;
+
+    /* if a line cannot fit the buffer for whatever reason, flush the existing bufffer */
+    if ((obuf->capacity - obuf->filled) < final_size) {
+        if (obufs->mutex) {
+            pthread_mutex_lock(obufs->mutex);
+        }
+        octets += OutputBuffer_flush(obuf, stdout);
+        if (obufs->mutex) {
+            pthread_mutex_unlock(obufs->mutex);
+        }
+    }
+
+    /* if the line is larger than the entire buffer, flush this row */
+    if (obuf->capacity < final_size) {
+        /* the existing buffer will have been flushed a few lines ago, maintaining output order */
+        if (obufs->mutex) {
+            pthread_mutex_lock(obufs->mutex);
+        }
+
+        octets += fwrite(line, sizeof(char), size, stdout);
+        octets += fwrite("\n", sizeof(char), 1, stdout);
+
+        obufs->buffers[id].count++;
+        if (obufs->mutex) {
+            pthread_mutex_unlock(obufs->mutex);
+        }
+    }
+    /* otherwise, the line can fit into the buffer, so buffer it */
+    /* if the old data + this line cannot fit the buffer, works since old data has been flushed */
+    /* if the old data + this line fit the buffer, old data was not flushed, but no issue */
+    else {
+        char * buf = ((char *) obuf->buf) + obuf->filled;
+        size_t filled = 0;
+
+        memcpy(buf, line, size);
+        buf += size;
+
+        *buf = '\n';
+
+        octets += final_size;
+        obuf->filled += final_size;
+        obuf->count++;
+    }
+
+    return octets;
 }
 
 size_t OutputBuffers_flush_to_single(struct OutputBuffers * obufs, FILE * out) {

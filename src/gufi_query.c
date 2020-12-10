@@ -374,68 +374,33 @@ static int print_callback(void *args, int count, char **data, char **columns) {
     const int id = ca->id;
     struct OutputBuffers *obs = ca->output_buffers;
 
-    /* if (gts.outfd[id]) { */
-    /*     if (obs) { */
-            struct OutputBuffer *ob = &obs->buffers[id];
+    /* cache lengths of each column */
+    size_t *lens = malloc(count * sizeof(size_t));
+    size_t row_len = count; /* one delimiter per column */
+    for(int i = 0; i < count; i++) {
+        lens[i] = strlen(data[i]);
+        row_len += lens[i];
+    }
+    row_len *= sizeof(char);
 
-            size_t *lens = malloc(count * sizeof(size_t));
-            size_t row_len = count + 1; /* one delimiter per column + newline */
-            for(int i = 0; i < count; i++) {
-                lens[i] = strlen(data[i]);
-                row_len += lens[i];
-            }
+    char * row = malloc(row_len);
+    char * curr = row;
 
-            /* if a row cannot fit the buffer for whatever reason, flush the existing bufffer */
-            if ((ob->capacity - ob->filled) < row_len) {
-                if (obs->mutex) {
-                    pthread_mutex_lock(obs->mutex);
-                }
-                OutputBuffer_flush(ob, gts.outfd[id]);
-                if (obs->mutex) {
-                    pthread_mutex_unlock(obs->mutex);
-                }
-            }
+    /* concatenate columns + delimiter */
+    /* might be faster with custom OutputBuffers_println */
+    /* since it would avoid the malloc and memcpys */
+    for(int i = 0; i < count; i++) {
+        memcpy(curr, data[i], lens[i]);
+        curr += lens[i];
 
-            /* if the row is larger than the entire buffer, flush this row */
-            if (ob->capacity < row_len) {
-                /* the existing buffer will have been flushed a few lines ago, maintaining output order */
-                if (obs->mutex) {
-                    pthread_mutex_lock(obs->mutex);
-                }
-                for(int i = 0; i < count; i++) {
-                    fwrite(data[i], sizeof(char), lens[i], gts.outfd[id]);
-                    fwrite(in.delim, sizeof(char), 1, gts.outfd[id]);
-                }
-                fwrite("\n", sizeof(char), 1, gts.outfd[id]);
-                obs->buffers[id].count++;
-                if (obs->mutex) {
-                    pthread_mutex_unlock(obs->mutex);
-                }
-            }
-            /* otherwise, the row can fit into the buffer, so buffer it */
-            /* if the old data + this row cannot fit the buffer, works since old data has been flushed */
-            /* if the old data + this row fit the buffer, old data was not flushed, but no issue */
-            else {
-                char *buf = ob->buf;
-                size_t filled = ob->filled;
-                for(int i = 0; i < count; i++) {
-                    memcpy(&buf[filled], data[i], lens[i]);
-                    filled += lens[i];
+        *curr = in.delim[0];
+        curr++;
+    }
 
-                    buf[filled] = in.delim[0];
-                    filled++;
-                }
+    OutputBuffers_println(obs, id, row, row_len, gts.outfd[id]);
 
-                buf[filled] = '\n';
-                filled++;
-
-                ob->filled = filled;
-                ob->count++;
-            }
-
-            free(lens);
-    /*     } */
-    /* } */
+    free(row);
+    free(lens);
 
     ca->rows++;
 
