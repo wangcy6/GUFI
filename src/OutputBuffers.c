@@ -181,7 +181,6 @@ size_t OutputBuffers_println(struct OutputBuffers * obufs, const int id, const v
     /* if the old data + this line fit the buffer, old data was not flushed, but no issue */
     else {
         char * buf = ((char *) obuf->buf) + obuf->filled;
-        size_t filled = 0;
 
         memcpy(buf, line, size);
         buf += size;
