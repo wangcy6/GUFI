@@ -661,9 +661,7 @@ FILE ** open_per_thread_traces(char * filename, const int count) {
 }
 
 int main(int argc, char * argv[]) {
-    /* have to call clock_gettime explicitly to get start time and epoch */
-    struct start_end main_call;
-    clock_gettime(CLOCK_MONOTONIC, &main_call.start);
+    define_start(main_call);
     epoch = since_epoch(&main_call.start);
 
     int idx = parse_cmd_line(argc, argv, "hHn:d:", 2, "input_file output_dir", &in);
@@ -734,8 +732,7 @@ int main(int argc, char * argv[]) {
     close_per_thread_traces(traces, in.maxthreads);
     close(templatefd);
 
-    /* have to call clock_gettime explicitly to get end time */
-    clock_gettime(CLOCK_MONOTONIC, &main_call.end);
+    timestamp_end(main_call);
 
     #if defined(DEBUG) && defined(CUMULATIVE_TIMES)
     fprintf(stderr, "Handle Args:               %.2Lfs\n", ((long double) total_handle_args) / 1e9L);
