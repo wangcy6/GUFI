@@ -184,7 +184,7 @@ set(C_SOURCES
   gufi_dir2index.c
   gufi_dir2trace.c
   gufi_trace2index.c
-  gufi_trace2tree.c
+  gufi_trace2dir.c
   gufi_query.c
   gufi_stat.c
   parallel_find.c
