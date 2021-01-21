@@ -176,7 +176,7 @@ struct Args {
     // run time variables
     struct Stat **stats;          // array of timestamps for each thread
                                   // use thread id to index into this array
-                                  // and StatType to index into the timetsamp
+                                  // and StatType to index into the timestamp
 };
 
 struct path;
@@ -241,7 +241,7 @@ int parse_args(int argc, char **argv,
                const char *getopt_str,
                struct Args *args) {
     if (!argv || !getopt_str || !args) {
-        return 1;
+        return -1;
     }
 
     memset(args, 0, sizeof(*args));
@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
 
     printf("Target:                     %s\n", rootdir);
     printf("Thread Count:               %zu\n", args.thread_count);
-    printf("Levels under root:          %zu\n", args.max_depth);
+    printf("Levels:                     %zu\n", args.max_depth);
     printf("Branching Factor:           %zu\n", args.branching_factor);
     printf("Files under each directory: %zu\n", args.files_per_dir);
     printf("Iterations:                 %zu\n", args.iterations);
@@ -412,12 +412,12 @@ int main(int argc, char *argv[]) {
         }
 
         // remove files first so they don't have to be checked when removing directories
-        if ((rc == 0) && args.stat && args.remove) {
+        if ((rc == 0) && args.remove && args.files_per_dir) {
             rc = run(pool, rootdir, rm_file, &args, realtime, RM_DIR);
         }
 
         // remove directories
-        if ((rc == 0) && args.stat && args.remove) {
+        if ((rc == 0) && args.remove && args.branching_factor) {
             rc = run(pool, rootdir, rm_dir, &args, realtime, RM_FILE);
         }
     }
@@ -707,8 +707,8 @@ int stat_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 0;
 }
 
-// function that actually creates the files
-// this allows for parallel creates in a single directory
+// function that actually stats the files
+// this allows for parallel stats in a single directory
 int stat_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *file = (struct path *) data;
