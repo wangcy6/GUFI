@@ -125,9 +125,9 @@ enum StatType {
 
 struct Stat {
     size_t count;
-    long double secs;  // sum of individual calls
-    long double min;   // minimum time
-    long double max;   // maximum time
+    long double secs;  /* sum of individual calls */
+    long double min;   /* minimum time */
+    long double max;   /* maximum time */
 };
 
 void Stat_init(struct Stat *stat) {
@@ -154,9 +154,9 @@ void Stat_print(FILE *out, const char *name, struct Stat *stat, const long doubl
     fprintf(out, "%-13s %10zu %16.2Lf %18Lf %19Lf %19Lf\n", name, stat->count, realtime, stat->secs, stat->min, stat->max);
 }
 
-// struct passed into QPTPool as extra arguments
+/* struct passed into QPTPool as extra arguments */
 struct Args {
-    // values extracted from argv
+    /* values extracted from argv */
     int create;                   /* -C */
     int remove;                   /* -R */
     int stat;                     /* -T */
@@ -167,10 +167,10 @@ struct Args {
     int use_mknod;                /* -k */
     size_t thread_count;          /* -n */
 
-    // run time variables
-    struct Stat **stats;          // array of timestamps for each thread
-                                  // use thread id to index into this array
-                                  // and StatType to index into the timestamp
+    /* run time variables */
+    struct Stat **stats;          /* array of timestamps for each thread */
+                                  /* use thread id to index into this array */
+                                  /* and StatType to index into the timestamp */
 };
 
 struct path;
@@ -180,7 +180,7 @@ struct rm_data {
     pthread_mutex_t mutex;
 };
 
-// work for each thread
+/* work for each thread */
 struct path {
     char name[MAXPATH];
     size_t current_level;
@@ -188,9 +188,9 @@ struct path {
     struct rm_data *rm;
 };
 
-// forward declare metatdata operation functions
-// these functions only operate on the provided path
-// subdirectories are queued for processing
+/* forward declare metatdata operation functions */
+/* these functions only operate on the provided path */
+/* subdirectories are queued for processing */
 int create_dir     (struct QPTPool *ctx, const size_t id, void *data, void *extra);
 int open_close_file(struct QPTPool *ctx, const size_t id, void *data, void *extra);
 int mknod_file     (struct QPTPool *ctx, const size_t id, void *data, void *extra);
@@ -199,7 +199,7 @@ int stat_file      (struct QPTPool *ctx, const size_t id, void *data, void *extr
 int rm_dir         (struct QPTPool *ctx, const size_t id, void *data, void *extra);
 int rm_file        (struct QPTPool *ctx, const size_t id, void *data, void *extra);
 
-// common code used to run a metadata operation in parallel
+/* common code used to run a metadata operation in parallel */
 int run(struct QPTPool *ctx, const char *path,
         QPTPoolFunc_t func, struct Args *args,
         long double *realtime, enum StatType type) {
@@ -210,19 +210,19 @@ int run(struct QPTPool *ctx, const char *path,
     }
     memcpy(root->name, path, strlen(path));
 
-    // add work so processing starts immediately
+    /* add work so processing starts immediately */
     QPTPool_enqueue(ctx, 0, func, root);
 
     struct start_end rt;
     timestamp_start(rt);
 
-    // start threads
+    /* start threads */
     if (QPTPool_start(ctx, args) != args->thread_count) {
         fprintf(stderr, "Failed to start threads\n");
         return -1;
     }
 
-    // wait for work to complete
+    /* wait for work to complete */
     QPTPool_wait(ctx);
 
     timestamp_end(rt);
@@ -250,7 +250,7 @@ int parse_args(int argc, char **argv,
 
     int retval = 0;
     int ch;
-    optind = 1; // reset to 1, not 0 (man 3 getopt)
+    optind = 1; /* reset to 1, not 0 (man 3 getopt) */
     while ( (ch = getopt(argc, argv, getopt_str)) != -1) {
         switch (ch) {
 
@@ -330,7 +330,7 @@ int main(int argc, char *argv[]) {
     printf("Expected Dir Count:         %zu\n", expected_dirs);
     printf("Expected File Count:        %zu\n", expected_files);
 
-    // generate the top level
+    /* generate the top level */
     if (args.create) {
         struct stat top_st;
         memset(&top_st, 0, sizeof(struct stat));
@@ -342,21 +342,21 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        // remove only the root directory so that it can be created by the test
+        /* remove only the root directory so that it can be created by the test */
         if (rmdir(rootdir) != 0) {
             fprintf(stderr, "Root directory removeal for %s: %d %s\n", rootdir, errno, strerror(errno));
             return 1;
         }
     }
 
-    // start up threads and push root into the queue for processing
+    /* start up thread pool */
     struct QPTPool *pool = QPTPool_init(args.thread_count);
     if (!pool) {
         fprintf(stderr, "Failed to initialize thread pool\n");
         return 1;
     }
 
-    // initialize stats array
+    /* initialize stats array */
     struct Stat **thread_stats = calloc(args.thread_count, sizeof(struct Stat *));
     if (!thread_stats) {
         QPTPool_destroy(pool);
@@ -379,12 +379,12 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &total_time.start);
 
     for(size_t i = 0; (rc == 0) && (i < args.iterations); i++) {
-        // create directories
+        /* create directories */
         if (args.create && args.branching_factor) {
             rc = run(pool, rootdir, create_dir, &args, realtime, CREATE_DIR);
         }
 
-        // create files
+        /* create files */
         if ((rc == 0) && args.create && args.files_per_dir) {
             if (args.use_mknod) {
                 rc = run(pool, rootdir, mknod_file, &args, realtime, MKNOD_FILE);
@@ -395,22 +395,22 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // stat directories
+        /* stat directories */
         if ((rc == 0) && args.stat && args.branching_factor) {
             rc = run(pool, rootdir, stat_dir, &args, realtime, STAT_DIR);
         }
 
-        // stat files
+        /* stat files */
         if ((rc == 0) && args.stat && args.files_per_dir) {
             rc = run(pool, rootdir, stat_file, &args, realtime, STAT_FILE);
         }
 
-        // remove files first so they don't have to be checked when removing directories
+        /* remove files first so they don't have to be checked when removing directories */
         if ((rc == 0) && args.remove && args.files_per_dir) {
             rc = run(pool, rootdir, rm_file, &args, realtime, RM_DIR);
         }
 
-        // remove directories
+        /* remove directories */
         if ((rc == 0) && args.remove && args.branching_factor) {
             rc = run(pool, rootdir, rm_dir, &args, realtime, RM_FILE);
         }
@@ -421,7 +421,7 @@ int main(int argc, char *argv[]) {
     const size_t threads_started = QPTPool_threads_started(pool);
     QPTPool_destroy(pool);
 
-    // combine stats
+    /* combine stats */
     struct Stat all[MAX_STAT_TYPE];
     for(int type = CREATE_DIR; type < MAX_STAT_TYPE; type++) {
         Stat_init(&all[type]);
@@ -460,7 +460,7 @@ int main(int argc, char *argv[]) {
             }
             else {
                 Stat_print(stdout, "open",        &all[OPEN_FILE], realtime[OPEN_FILE]);
-                Stat_print(stdout, "close",       &all[CLOSE_FILE], realtime[OPEN_FILE]); // cannot separate close from open
+                Stat_print(stdout, "close",       &all[CLOSE_FILE], realtime[OPEN_FILE]); /* cannot separate close from open */
             }
         }
     }
@@ -488,19 +488,19 @@ int main(int argc, char *argv[]) {
     return rc;
 }
 
-// create a directory name
+/* create a directory name */
 size_t dir_name(char *dst, const size_t dst_size,
                 const char *parent, const size_t index) {
     return SNPRINTF(dst, dst_size, "%s/d.%zu", parent, index);
 }
 
-// create a file name
+/* create a file name */
 size_t file_name(char *dst, const size_t dst_size,
                  const char *parent, const size_t index) {
     return SNPRINTF(dst, dst_size, "%s/f.%zu", parent, index);
 }
 
-// common code for pushing work into the thread pool
+/* common code for pushing work into the thread pool */
 size_t enqueue_subdirs(struct QPTPool *ctx, const size_t id,
                        struct path *dir, struct Args *args,
                        QPTPoolFunc_t func) {
@@ -522,7 +522,7 @@ size_t enqueue_subdirs(struct QPTPool *ctx, const size_t id,
     return pushed;
 }
 
-// generate the given directory
+/* generate the given directory */
 int create_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -546,8 +546,8 @@ int create_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
         }
     }
 
-    // must enqueue after mkdir succeeds to guarantee that
-    // the parent exists when the work is processed
+    /* must enqueue after mkdir succeeds to guarantee that
+       the parent exists when the work is processed */
     enqueue_subdirs(ctx, id, dir, args, create_dir);
 
     Stat_add(args->stats[id], CREATE_DIR, elapsed(&create_dir_time));
@@ -556,14 +556,14 @@ int create_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 0;
 }
 
-// function that actually creates the files
-// this allows for parallel creates in a single directory
+/* function that actually creates the files
+   this allows for parallel creates in a single directory */
 int open_close_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *file = (struct path *) data;
 
-    // overwrite any existing data
-    // assumes that the parent directory exists
+    /* overwrite any existing data */
+    /* assumes that the parent directory exists */
     struct start_end open_time;
     timestamp_start(open_time);
     const int fd = open(file->name, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -590,7 +590,7 @@ int open_close_file_actual(struct QPTPool *ctx, const size_t id, void *data, voi
     return 0;
 }
 
-// generate files in the given directory with open and close
+/* generate files in the given directory with open and close */
 int open_close_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -600,7 +600,7 @@ int open_close_file(struct QPTPool *ctx, const size_t id, void *data, void *extr
         return 0;
     }
 
-    // queue up the files in this directory for creation
+    /* queue up the files in this directory for creation */
     for(size_t i = 0; i < args->files_per_dir; i++) {
         struct path *file = calloc(1, sizeof(struct path));
         if (!file) {
@@ -617,13 +617,13 @@ int open_close_file(struct QPTPool *ctx, const size_t id, void *data, void *extr
     return 0;
 }
 
-// function that actually creates the files
-// this allows for parallel creates in a single directory
+/* function that actually creates the files
+   this allows for parallel creates in a single directory */
 int mknod_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *file = (struct path *) data;
 
-    // assumes that the parent directory exists
+    /* assumes that the parent directory exists */
     struct start_end mknod_time;
     timestamp_start(mknod_time);
     const int rc = mknod(file->name, S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, 0);
@@ -643,7 +643,7 @@ int mknod_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *ex
     return 0;
 }
 
-// generate files in the given directory with mknod
+/* generate files in the given directory with mknod */
 int mknod_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -653,7 +653,7 @@ int mknod_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
         return 0;
     }
 
-    // create the files in this directory
+    /* create the files in this directory */
     for(size_t i = 0; i < args->files_per_dir; i++) {
         struct path *file = calloc(1, sizeof(struct path));
         if (!file) {
@@ -670,7 +670,7 @@ int mknod_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 0;
 }
 
-// call stat on the subdirectories in the given directory
+/* call stat on the subdirectories in the given directory */
 int stat_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -701,8 +701,8 @@ int stat_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 0;
 }
 
-// function that actually stats the files
-// this allows for parallel stats in a single directory
+/* function that actually stats the files
+   this allows for parallel stats in a single directory */
 int stat_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *file = (struct path *) data;
@@ -726,7 +726,7 @@ int stat_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *ext
     return 0;
 }
 
-// call stat on the files in the given directory
+/* call stat on the files in the given directory */
 int stat_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -752,7 +752,7 @@ int stat_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 0;
 }
 
-// perform the actual rmdir while coming up from the bottom
+/* perform the actual rmdir while coming up from the bottom */
 int rm_dir_up(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -761,8 +761,8 @@ int rm_dir_up(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     const size_t subdirs = dir->rm->subdirs;
     pthread_mutex_unlock(&dir->rm->mutex);
 
-    if (((dir->current_level + 1) >= args->max_depth) ||  // at bottom
-        !subdirs) {                                       // or can delete
+    if (((dir->current_level + 1) >= args->max_depth) ||  /* at bottom */
+        !subdirs) {                                       /* or can delete */
 
         struct start_end rm_time;
         timestamp_start(rm_time);
@@ -777,7 +777,7 @@ int rm_dir_up(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
             fprintf(stderr, "Failed to rm %s: %d %s\n", dir->name, err, strerror(err));
         }
 
-        // update parent
+        /* update parent */
         if (dir->rm->parent) {
             pthread_mutex_lock(&dir->rm->parent->rm->mutex);
             dir->rm->parent->rm->subdirs--;
@@ -797,7 +797,7 @@ int rm_dir_up(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 1;
 }
 
-// traverse downwards to register all directories for deletion
+/* traverse downwards to register all directories for deletion */
 int rm_dir_down(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
@@ -840,8 +840,8 @@ int rm_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     return 0;
 }
 
-// function that actually removes the files
-// this allows for parallel removes in a single directory
+/* function that actually removes the files
+   this allows for parallel removes in a single directory */
 int rm_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *file = (struct path *) data;
@@ -864,7 +864,7 @@ int rm_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra
     return 0;
 }
 
-// call unlink on the files in the given directory
+/* call unlink on the files in the given directory */
 int rm_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
