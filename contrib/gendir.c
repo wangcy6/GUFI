@@ -233,72 +233,7 @@ int run(struct QPTPool *ctx, const char *path,
 
 int parse_args(int argc, char **argv,
                const char *getopt_str,
-               struct Args *args) {
-    if (!argv || !getopt_str || !args) {
-        return -1;
-    }
-
-    memset(args, 0, sizeof(*args));
-    args->create = 0;
-    args->stat = 0;
-    args->branching_factor = 0;
-    args->files_per_dir = 0;
-    args->iterations = 1;
-    args->use_mknod = 0;
-    args->thread_count = 1;
-    args->max_depth = 0;
-
-    int retval = 0;
-    int ch;
-    optind = 1; /* reset to 1, not 0 (man 3 getopt) */
-    while ( (ch = getopt(argc, argv, getopt_str)) != -1) {
-        switch (ch) {
-
-            case 'C':
-                args->create = 1;
-                break;
-
-            case 'R':
-                args->remove = 1;
-                break;
-
-            case 'T':
-                args->stat = 1;
-                break;
-
-            case 'b':
-                INSTALL_UINT(args->branching_factor, optarg, (size_t) 0, (size_t) -1, "-b");
-                break;
-
-            case 'd':
-                INSTALL_UINT(args->max_depth, optarg, (size_t) 0, (size_t) -1, "-d");
-                break;
-
-            case 'f':
-                INSTALL_UINT(args->files_per_dir, optarg, (size_t) 0, (size_t) -1, "-f");
-                break;
-
-            case 'i':
-                INSTALL_UINT(args->iterations, optarg, (size_t) 0, (size_t) -1, "-i");
-                break;
-
-            case 'k':
-                args->use_mknod = 1;
-                break;
-
-            case 'n':
-                INSTALL_UINT(args->thread_count, optarg, (size_t) 0, (size_t) -1, "-n");
-                break;
-
-            default:
-                retval = -1;
-                fprintf(stderr, "?? getopt returned character code 0%o ??\n", ch);
-                break;
-        };
-    }
-
-    return (retval != -1)?optind:-1;
-}
+               struct Args *args);
 
 int main(int argc, char *argv[]) {
     struct Args args;
@@ -486,6 +421,75 @@ int main(int argc, char *argv[]) {
     free(thread_stats);
 
     return rc;
+}
+
+int parse_args(int argc, char **argv,
+               const char *getopt_str,
+               struct Args *args) {
+    if (!argv || !getopt_str || !args) {
+        return -1;
+    }
+
+    memset(args, 0, sizeof(*args));
+    args->create = 0;
+    args->stat = 0;
+    args->branching_factor = 0;
+    args->files_per_dir = 0;
+    args->iterations = 1;
+    args->use_mknod = 0;
+    args->thread_count = 1;
+    args->max_depth = 0;
+
+    int retval = 0;
+    int ch;
+    optind = 1; /* reset to 1, not 0 (man 3 getopt) */
+    while ( (ch = getopt(argc, argv, getopt_str)) != -1) {
+        switch (ch) {
+
+            case 'C':
+                args->create = 1;
+                break;
+
+            case 'R':
+                args->remove = 1;
+                break;
+
+            case 'T':
+                args->stat = 1;
+                break;
+
+            case 'b':
+                INSTALL_UINT(args->branching_factor, optarg, (size_t) 0, (size_t) -1, "-b");
+                break;
+
+            case 'd':
+                INSTALL_UINT(args->max_depth, optarg, (size_t) 0, (size_t) -1, "-d");
+                break;
+
+            case 'f':
+                INSTALL_UINT(args->files_per_dir, optarg, (size_t) 0, (size_t) -1, "-f");
+                break;
+
+            case 'i':
+                INSTALL_UINT(args->iterations, optarg, (size_t) 0, (size_t) -1, "-i");
+                break;
+
+            case 'k':
+                args->use_mknod = 1;
+                break;
+
+            case 'n':
+                INSTALL_UINT(args->thread_count, optarg, (size_t) 0, (size_t) -1, "-n");
+                break;
+
+            default:
+                retval = -1;
+                fprintf(stderr, "?? getopt returned character code 0%o ??\n", ch);
+                break;
+        };
+    }
+
+    return (retval != -1)?optind:-1;
 }
 
 /* create a directory name */
