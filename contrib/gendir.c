@@ -124,7 +124,6 @@ enum StatType {
 };
 
 struct Stat {
-    pthread_mutex_t mutex;
     size_t count;
     long double secs;  // sum of individual calls
     long double min;   // minimum time
@@ -132,7 +131,6 @@ struct Stat {
 };
 
 void Stat_init(struct Stat *stat) {
-    stat->mutex = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
     stat->count = 0;
     stat->secs = 0;
     stat->min = LDBL_MAX;
@@ -140,8 +138,6 @@ void Stat_init(struct Stat *stat) {
 }
 
 void Stat_add(struct Stat *stats, enum StatType type, const long double secs) {
-    pthread_mutex_lock(&stats[type].mutex);
-
     stats[type].count++;
     stats[type].secs += secs;
 
@@ -152,8 +148,6 @@ void Stat_add(struct Stat *stats, enum StatType type, const long double secs) {
     if (secs > stats[type].max) {
         stats[type].max = secs;
     }
-
-    pthread_mutex_unlock(&stats[type].mutex);
 }
 
 void Stat_print(FILE *out, const char *name, struct Stat *stat, const long double realtime) {
