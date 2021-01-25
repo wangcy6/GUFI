@@ -130,33 +130,9 @@ struct Stat {
     long double max;   /* maximum time */
 };
 
-void Stat_init(struct Stat *stat) {
-    stat->count = 0;
-    stat->secs = 0;
-    stat->min = LDBL_MAX;
-    stat->max = -LDBL_MAX;
-}
-
-void Stat_add(struct Stat *stats, enum StatType type, const long double secs) {
-    stats[type].count++;
-    stats[type].secs += secs;
-
-    if (secs < stats[type].min) {
-        stats[type].min = secs;
-    }
-
-    if (secs > stats[type].max) {
-        stats[type].max = secs;
-    }
-}
-
-void Stat_print(FILE *out, const char *name, struct Stat *stat, const long double realtime) {
-    if (stat->count == 0) {
-        memset(stat, 0, sizeof(*stat));
-    }
-
-    fprintf(out, "%-13s %10zu %16.2Lf %18Lf %19Lf %19Lf\n", name, stat->count, realtime, stat->secs, stat->min, stat->max);
-}
+void Stat_init(struct Stat *stat);
+void Stat_add(struct Stat *stats, enum StatType type, const long double secs);
+void Stat_print(FILE *out, const char *name, struct Stat *stat, const long double realtime);
 
 /* struct passed into QPTPool as extra arguments */
 struct Args {
@@ -972,4 +948,32 @@ int rm_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
 
     enqueue_subdirs(ctx, id, dir, args, rm_file);
     return 0;
+}
+
+void Stat_init(struct Stat *stat) {
+    stat->count = 0;
+    stat->secs = 0;
+    stat->min = LDBL_MAX;
+    stat->max = -LDBL_MAX;
+}
+
+void Stat_add(struct Stat *stats, enum StatType type, const long double secs) {
+    stats[type].count++;
+    stats[type].secs += secs;
+
+    if (secs < stats[type].min) {
+        stats[type].min = secs;
+    }
+
+    if (secs > stats[type].max) {
+        stats[type].max = secs;
+    }
+}
+
+void Stat_print(FILE *out, const char *name, struct Stat *stat, const long double realtime) {
+    if (stat->count == 0) {
+        memset(stat, 0, sizeof(*stat));
+    }
+
+    fprintf(out, "%-13s %10zu %16.2Lf %18Lf %19Lf %19Lf\n", name, stat->count, realtime, stat->secs, stat->min, stat->max);
 }
