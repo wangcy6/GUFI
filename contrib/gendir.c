@@ -66,7 +66,7 @@ OF SUCH DAMAGE.
 This code generates directories in a well defined manner. The root
 directory is created first if it does not already exist, and is not
 counted in the statistics.  Generation starts under the root
-directory, aka starts at level 1. The provided fixed number
+directory, aka starts at level 0. The provided fixed number
 subdirectories and files are generated at every directory. At the
 bottom level, there are files but no subdirectories.
 
@@ -138,8 +138,8 @@ void Stat_print(FILE *out, const char *name, struct Stat *stat, const long doubl
 struct Args {
     /* values extracted from argv */
     int create;                   /* -C */
-    int remove;                   /* -R */
     int stat;                     /* -T */
+    int remove;                   /* -R */
     size_t branching_factor;      /* -b */
     size_t max_depth;             /* -d */
     size_t files_per_dir;         /* -f */
@@ -152,6 +152,22 @@ struct Args {
                                   /* use thread id to index into this array */
                                   /* and StatType to index into the timestamp */
 };
+
+void help(FILE *out, char *argv0) {
+    fprintf(out, "Syntax: %s [options] target-directory\n", argv0);
+    fprintf(out, "\n");
+    fprintf(out, "options:\n");
+    fprintf(out, "    -h        print this help text and exit\n");
+    fprintf(out, "    -C        create files/directories\n");
+    fprintf(out, "    -T        stat files/directtories\n");
+    fprintf(out, "    -R        remove files/directories\n");
+    fprintf(out, "    -b <int>  branching factor of directories\n");
+    fprintf(out, "    -d <int>  depth of tree [root = 0, n)\n");
+    fprintf(out, "    -f <int>  number of files in each directory\n");
+    fprintf(out, "    -i <int>  number of iterations to run\n");
+    fprintf(out, "    -k        use mknod instead of open/close\n");
+    fprintf(out, "    -n <int>  thread count\n");
+}
 
 struct path;
 struct rm_data {
@@ -226,7 +242,7 @@ int parse_args(int argc, char **argv,
 int main(int argc, char *argv[]) {
     struct Args args;
 
-    int idx = parse_args(argc, argv, "CRTb:d:f:i:kn:", &args);
+    int idx = parse_args(argc, argv, "hCTRb:d:f:i:kn:", &args);
     if (idx < 0) {
       return 1;
     }
@@ -443,6 +459,10 @@ int parse_args(int argc, char **argv,
     while ( (ch = getopt(argc, argv, getopt_str)) != -1) {
         switch (ch) {
 
+            case 'h':
+                help(stdout, argv[0]);
+                return -1;
+
             case 'C':
                 args->create = 1;
                 break;
@@ -517,8 +537,8 @@ char *file_name(struct path *dir, const size_t index) {
 
 /* common code for pushing work into the thread pool */
 size_t enqueue_subdirs(struct QPTPool *ctx, const size_t id,
-                     struct path *dir, struct Args *args,
-                     QPTPoolFunc_t func) {
+                       struct path *dir, struct Args *args,
+                       QPTPoolFunc_t func) {
     size_t pushed = 0;
     const size_t next_level = dir->current_level + 1;
 
