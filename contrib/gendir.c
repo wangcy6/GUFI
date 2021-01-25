@@ -151,6 +151,10 @@ void Stat_add(struct Stat *stats, enum StatType type, const long double secs) {
 }
 
 void Stat_print(FILE *out, const char *name, struct Stat *stat, const long double realtime) {
+    if (stat->count == 0) {
+        memset(stat, 0, sizeof(*stat));
+    }
+
     fprintf(out, "%-13s %10zu %16.2Lf %18Lf %19Lf %19Lf\n", name, stat->count, realtime, stat->secs, stat->min, stat->max);
 }
 
@@ -182,8 +186,9 @@ struct rm_data {
 
 /* work for each thread */
 struct path {
-    char name[MAXPATH];
+    char *name;
     size_t current_level;
+    QPTPoolFunc_t func;
 
     struct rm_data *rm;
 };
@@ -208,7 +213,14 @@ int run(struct QPTPool *ctx, const char *path,
         fprintf(stderr, "Could not allocate root work: %s\n", path);
         return -1;
     }
-    memcpy(root->name, path, strlen(path));
+
+    const size_t name_len = strlen(path) + 1;
+    root->name = calloc(name_len, sizeof(char));
+    if (!root->name) {
+        fprintf(stderr, "Could not allocate root name: %s\n", path);
+        return -1;
+    }
+    memcpy(root->name, path, name_len);
 
     /* add work so processing starts immediately */
     QPTPool_enqueue(ctx, 0, func, root);
@@ -239,6 +251,9 @@ int main(int argc, char *argv[]) {
     struct Args args;
 
     int idx = parse_args(argc, argv, "CRTb:d:f:i:kn:", &args);
+    if (idx < 0) {
+      return 1;
+    }
     if (idx >= argc) {
         fprintf(stderr, "Missing target path argument\n");
         return 1;
@@ -294,6 +309,7 @@ int main(int argc, char *argv[]) {
     /* initialize stats array */
     struct Stat **thread_stats = calloc(args.thread_count, sizeof(struct Stat *));
     if (!thread_stats) {
+        fprintf(stderr, "Failed to allocate space for stats array\n");
         QPTPool_destroy(pool);
         return 1;
     }
@@ -342,12 +358,12 @@ int main(int argc, char *argv[]) {
 
         /* remove files first so they don't have to be checked when removing directories */
         if ((rc == 0) && args.remove && args.files_per_dir) {
-            rc = run(pool, rootdir, rm_file, &args, realtime, RM_DIR);
+            rc = run(pool, rootdir, rm_file, &args, realtime, RM_FILE);
         }
 
         /* remove directories */
         if ((rc == 0) && args.remove && args.branching_factor) {
-            rc = run(pool, rootdir, rm_dir, &args, realtime, RM_FILE);
+            rc = run(pool, rootdir, rm_dir, &args, realtime, RM_DIR);
         }
     }
 
@@ -411,8 +427,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (args.remove) {
-        Stat_print(stdout, "rm (dir)",    &all[RM_DIR], realtime[RM_DIR]);
-        Stat_print(stdout, "rm (file)",   &all[RM_FILE], realtime[RM_FILE]);
+        if (args.branching_factor) {
+            Stat_print(stdout, "rm (dir)",    &all[RM_DIR], realtime[RM_DIR]);
+        }
+
+        if (args.files_per_dir) {
+            Stat_print(stdout, "rm (file)",   &all[RM_FILE], realtime[RM_FILE]);
+        }
     }
 
     for(size_t i = 0; i < args.thread_count; i++) {
@@ -493,35 +514,58 @@ int parse_args(int argc, char **argv,
 }
 
 /* create a directory name */
-size_t dir_name(char *dst, const size_t dst_size,
-                const char *parent, const size_t index) {
-    return SNPRINTF(dst, dst_size, "%s/d.%zu", parent, index);
+#define DIR_PATTERN "%s/d.%zu"
+char *dir_name(struct path *dir, const size_t index) {
+    const ssize_t dst_len = snprintf(NULL, 0, DIR_PATTERN, dir->name, index) + 1;
+    char *dst = malloc(dst_len);
+    const int rc = snprintf(dst, dst_len, DIR_PATTERN, dir->name, index);
+    if ((rc < 0) || (rc >= dst_len)) {
+        free(dst);
+        dst = NULL;
+    }
+    return dst;
 }
 
 /* create a file name */
-size_t file_name(char *dst, const size_t dst_size,
-                 const char *parent, const size_t index) {
-    return SNPRINTF(dst, dst_size, "%s/f.%zu", parent, index);
+#define FILE_PATTERN "%s/f.%zu"
+char *file_name(struct path *dir, const size_t index) {
+    const ssize_t dst_len = snprintf(NULL, 0, FILE_PATTERN, dir->name, index) + 1;
+    char *dst = malloc(dst_len + 1);
+    const int rc = snprintf(dst, dst_len, FILE_PATTERN, dir->name, index);
+    if ((rc < 0) || (rc >= dst_len)) {
+        free(dst);
+        dst = NULL;
+    }
+    return dst;
 }
 
 /* common code for pushing work into the thread pool */
 size_t enqueue_subdirs(struct QPTPool *ctx, const size_t id,
-                       struct path *dir, struct Args *args,
-                       QPTPoolFunc_t func) {
+                     struct path *dir, struct Args *args,
+                     QPTPoolFunc_t func) {
     size_t pushed = 0;
-
     const size_t next_level = dir->current_level + 1;
+
     for(size_t i = 0; i < args->branching_factor; i++) {
         struct path *subdir = calloc(1, sizeof(struct path));
         if (!subdir) {
             continue;
         }
 
-        dir_name(subdir->name, MAXPATH, dir->name, i);
+        subdir->name = dir_name(dir, i);
+        if (!subdir->name) {
+            free(subdir);
+            continue;
+        }
+
         subdir->current_level = next_level;
+
         QPTPool_enqueue(ctx, id, func, subdir);
         pushed++;
     }
+
+    free(dir->name);
+    free(dir);
 
     return pushed;
 }
@@ -532,6 +576,7 @@ int create_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct path *dir = (struct path *) data;
 
     if (dir->current_level >= args->max_depth) {
+        free(dir->name);
         free(dir);
         return 0;
     }
@@ -545,6 +590,7 @@ int create_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
         if (errno != EEXIST) {
             const int err = errno;
             fprintf(stderr, "mkdir failed for %s: %d %s\n", dir->name, err, strerror(err));
+            free(dir->name);
             free(dir);
             return 1;
         }
@@ -555,8 +601,6 @@ int create_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     enqueue_subdirs(ctx, id, dir, args, create_dir);
 
     Stat_add(args->stats[id], CREATE_DIR, elapsed(&create_dir_time));
-
-    free(dir);
     return 0;
 }
 
@@ -574,6 +618,7 @@ int open_close_file_actual(struct QPTPool *ctx, const size_t id, void *data, voi
     timestamp_end(open_time);
     if (fd < 0) {
         fprintf(stderr, "open failed for %s: %d %s\n",file->name, errno, strerror(errno));
+        free(file->name);
         free(file);
         return 1;
     }
@@ -589,8 +634,8 @@ int open_close_file_actual(struct QPTPool *ctx, const size_t id, void *data, voi
         Stat_add(args->stats[id], CLOSE_FILE, elapsed(&close_time));
     }
 
+    free(file->name);
     free(file);
-
     return 0;
 }
 
@@ -600,6 +645,7 @@ int open_close_file(struct QPTPool *ctx, const size_t id, void *data, void *extr
     struct path *dir = (struct path *) data;
 
     if (dir->current_level >= args->max_depth) {
+        free(dir->name);
         free(dir);
         return 0;
     }
@@ -611,13 +657,16 @@ int open_close_file(struct QPTPool *ctx, const size_t id, void *data, void *extr
             continue;
         }
 
-        file_name(file->name, MAXPATH, dir->name, i);
+        file->name = file_name(dir, i);
+        if (!file->name) {
+            free(file);
+            continue;
+        }
+
         QPTPool_enqueue(ctx, id, open_close_file_actual, file);
     }
 
     enqueue_subdirs(ctx, id, dir, args, open_close_file);
-
-    free(dir);
     return 0;
 }
 
@@ -637,12 +686,15 @@ int mknod_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *ex
         const int err = errno;
         if (err != EEXIST) {
             fprintf(stderr, "Failed to create %s: %d %s\n", file->name, err, strerror(err));
+            free(file->name);
             free(file);
+            return 1;
         }
     }
 
     Stat_add(args->stats[id], MKNOD_FILE, elapsed(&mknod_time));
 
+    free(file->name);
     free(file);
     return 0;
 }
@@ -653,6 +705,7 @@ int mknod_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct path *dir = (struct path *) data;
 
     if (dir->current_level >= args->max_depth) {
+        free(dir->name);
         free(dir);
         return 0;
     }
@@ -664,13 +717,16 @@ int mknod_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
             continue;
         }
 
-        file_name(file->name, MAXPATH, dir->name, i);
+        file->name = file_name(dir, i);
+        if (!file->name) {
+            free(file);
+            continue;
+        }
+
         QPTPool_enqueue(ctx, id, mknod_file_actual, file);
     }
 
     enqueue_subdirs(ctx, id, dir, args, mknod_file);
-
-    free(dir);
     return 0;
 }
 
@@ -680,6 +736,7 @@ int stat_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct path *dir = (struct path *) data;
 
     if (dir->current_level >= args->max_depth) {
+        free(dir->name);
         free(dir);
         return 0;
     }
@@ -693,6 +750,7 @@ int stat_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     if (rc < 0) {
         const int err = errno;
         fprintf(stderr, "stat failed for %s: %d %s\n", dir->name, err, strerror(err));
+        free(dir->name);
         free(dir);
         return 1;
     }
@@ -700,8 +758,6 @@ int stat_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     enqueue_subdirs(ctx, id, dir, args, stat_dir);
 
     Stat_add(args->stats[id], STAT_DIR, elapsed(&stat_time));
-
-    free(dir);
     return 0;
 }
 
@@ -720,12 +776,14 @@ int stat_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *ext
     if (rc < 0) {
         const int err = errno;
         fprintf(stderr, "Failed to stat %s: %d %s\n", file->name, err, strerror(err));
+        free(file->name);
         free(file);
         return 1;
     }
 
     Stat_add(args->stats[id], STAT_FILE, elapsed(&stat_time));
 
+    free(file->name);
     free(file);
     return 0;
 }
@@ -736,6 +794,7 @@ int stat_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct path *dir = (struct path *) data;
 
     if (dir->current_level >= args->max_depth) {
+        free(dir->name);
         free(dir);
         return 0;
     }
@@ -746,13 +805,16 @@ int stat_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
             continue;
         }
 
-        file_name(file->name, MAXPATH, dir->name, i);
+        file->name = file_name(dir, i);
+        if (!file->name) {
+            free(file);
+            continue;
+        }
+
         QPTPool_enqueue(ctx, id, stat_file_actual, file);
     }
 
     enqueue_subdirs(ctx, id, dir, args, stat_file);
-
-    free(dir);
     return 0;
 }
 
@@ -792,9 +854,10 @@ int rm_dir_up(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
                 QPTPool_enqueue(ctx, id, rm_dir_up, dir->rm->parent);
             }
         }
-        free(dir->rm);
-        free(dir);
 
+        free(dir->rm);
+        free(dir->name);
+        free(dir);
         return !!rc;
     }
 
@@ -806,24 +869,36 @@ int rm_dir_down(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct Args *args = (struct Args *) extra;
     struct path *dir = (struct path *) data;
 
-    if ((dir->current_level + 1) >= args->max_depth) {
+    const size_t next_level = dir->current_level + 1;
+    if (next_level >= args->max_depth) {
         QPTPool_enqueue(ctx, id, rm_dir_up, dir);
         return 0;
     }
-
-    const size_t next_level = dir->current_level + 1;
     for(size_t i = 0; i < args->branching_factor; i++) {
         struct path *subdir = calloc(1, sizeof(struct path));
         if (!subdir) {
             continue;
         }
 
-        dir_name(subdir->name, MAXPATH, dir->name, i);
+        subdir->name = dir_name(dir, i);
+        if (!subdir->name) {
+            free(subdir);
+            continue;
+        }
+
         subdir->current_level = next_level;
+
         subdir->rm = calloc(1, sizeof(struct rm_data));
+        if (!subdir->rm) {
+            free(subdir->name);
+            free(subdir);
+            continue;
+        }
+
         subdir->rm->parent = dir;
         subdir->rm->subdirs = args->branching_factor;
         subdir->rm->mutex = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+
         QPTPool_enqueue(ctx, id, rm_dir_down, subdir);
     }
 
@@ -840,7 +915,6 @@ int rm_dir(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     dir->rm->mutex = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
 
     QPTPool_enqueue(ctx, id, rm_dir_down, dir);
-
     return 0;
 }
 
@@ -858,12 +932,14 @@ int rm_file_actual(struct QPTPool *ctx, const size_t id, void *data, void *extra
     if (rc < 0) {
         const int err = errno;
         fprintf(stderr, "Failed to rm %s: %d %s\n", file->name, err, strerror(err));
+        free(file->name);
         free(file);
         return 1;
     }
 
     Stat_add(args->stats[id], RM_FILE, elapsed(&rm_time));
 
+    free(file->name);
     free(file);
     return 0;
 }
@@ -874,6 +950,7 @@ int rm_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
     struct path *dir = (struct path *) data;
 
     if (dir->current_level >= args->max_depth) {
+        free(dir->name);
         free(dir);
         return 0;
     }
@@ -884,12 +961,15 @@ int rm_file(struct QPTPool *ctx, const size_t id, void *data, void *extra) {
             continue;
         }
 
-        file_name(file->name, MAXPATH, dir->name, i);
+        file->name = file_name(dir, i);
+        if (!file->name) {
+            free(file);
+            continue;
+        }
+
         QPTPool_enqueue(ctx, id, rm_file_actual, file);
     }
 
     enqueue_subdirs(ctx, id, dir, args, rm_file);
-
-    free(dir);
     return 0;
 }
