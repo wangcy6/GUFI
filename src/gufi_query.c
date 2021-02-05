@@ -378,7 +378,7 @@ static int print_callback(void *args, int count, char **data, char **columns) {
     size_t *lens = malloc(count * sizeof(size_t));
     size_t row_len = count; /* one delimiter per column */
     for(int i = 0; i < count; i++) {
-        lens[i] = strlen(data[i]);
+        lens[i] = data[i]?strlen(data[i]):0;
         row_len += lens[i];
     }
     row_len *= sizeof(char);
@@ -520,9 +520,7 @@ int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) 
     if (gts.outdbd[id]) {
       /* if we have an out db then only have to attach the gufi db */
       db = gts.outdbd[id];
-      if (!attachdb(dbname, db, "tree", in.open_mode)) {
-          goto close_dir;
-      }
+      attachdb(dbname, db, "tree", in.open_mode);
     }
     else {
       /* otherwise, open a standalone database to query from */
@@ -655,7 +653,6 @@ int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) 
     debug_end(close_call);
     #endif
 
-  close_dir:
     debug_start(closedir_call);
     closedir(dir);
     debug_end(closedir_call);
