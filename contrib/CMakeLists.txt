@@ -84,6 +84,7 @@ endif()
 # potentially useful scripts
 configure_file(canned_queries.sh canned_queries.sh COPYONLY)
 configure_file(gentrace.py gentrace.py COPYONLY)
+configure_file(index_stats.sh index_stats.sh @ONLY)
 configure_file(trace_anonymizer.py trace_anonymizer.py COPYONLY)
 
 # make benchmark
