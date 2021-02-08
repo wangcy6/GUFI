@@ -96,21 +96,25 @@ empty=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT COUNT(*) FROM v${table} 
 # non-empty count
 nonempty=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT COUNT(*) FROM v${table} WHERE count > 0" ${out}.* | head -n 1 | sed 's/|$//g')
 
+# file count (non-empty dirs) (no need for "WHERE count > 0" because it just adds 0s)
+files=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT SUM(count) FROM v${table}" ${out}.* | head -n 1 | sed 's/|$//g')
+
 # total size (non-empty dirs) (no need for "WHERE count > 0" because it just adds 0s)
-size=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT TOTAL(size) FROM v${table}" ${out}.* | head -n 1 | sed 's/|$//g')
+size=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT SUM(size) FROM v${table}" ${out}.* | head -n 1 | sed 's/|$//g')
 
 # total depth
-depth=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT TOTAL(depth) FROM v${table}" ${out}.* | head -n 1 | sed 's/|$//g')
+depth=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT SUM(depth) FROM v${table}" ${out}.* | head -n 1 | sed 's/|$//g')
 
 # non-leaf directory count
 nonleaf=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT COUNT(*) FROM v${table} WHERE subdirs > 0" ${out}.* | head -n 1 | sed 's/|$//g')
 
 # total branching factor (non-leaf dirs)
-bf=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT TOTAL(subdirs) FROM v${table} WHERE subdirs > 0" ${out}.* | head -n 1 | sed 's/|$//g')
+bf=$(${QUERYDBN} -V "${outtable}" "${table}" "SELECT SUM(subdirs) FROM v${table} WHERE subdirs > 0" ${out}.* | head -n 1 | sed 's/|$//g')
 
-echo "Total Dirs:                 ${total}"
-echo "Empty Dirs:                 ${empty} ($( (echo -n "scale=4;"; echo ${empty} \* 100.0 / ${total}) | bc -l)%)"
-echo "Non-Empty Dirs:             ${nonempty} ($( (echo -n "scale=4;"; echo ${nonempty} \* 100.0 / ${total}) | bc -l)%)"
-echo "Avg Size of Non-empty Dirs: ${size} / ${nonempty} = $( (echo -n "scale=4;"; echo ${size} / ${nonempty}) | bc -l) bytes"
-echo "Avg Depth:                  ${depth} / ${total} = $( (echo -n "scale=4;"; echo ${depth} / ${total}) | bc -l)"
-echo "Avg Branching Factor:       ${bf} / ${nonleaf} = $( (echo -n "scale=4;"; echo ${bf} / ${nonleaf}) | bc -l)"
+echo "Total Dirs:                             ${total}"
+echo "Empty Dirs:                             ${empty} ($( (echo -n "scale=4;"; echo ${empty} \* 100.0 / ${total}) | bc -l)%)"
+echo "Non-Empty Dirs:                         ${nonempty} ($( (echo -n "scale=4;"; echo ${nonempty} \* 100.0 / ${total}) | bc -l)%)"
+echo "Avg No. Files of Non-empty Dirs:        ${files} / ${nonempty} = $( (echo -n "scale=4;"; echo ${files} / ${nonempty}) | bc -l)"
+echo "Avg Size of Non-empty Dirs:             ${size} / ${nonempty} = $( (echo -n "scale=4;"; echo ${size} / ${nonempty}) | bc -l) bytes"
+echo "Avg Depth:                              ${depth} / ${total} = $( (echo -n "scale=4;"; echo ${depth} / ${total}) | bc -l)"
+echo "Avg Branching Factor of Non-leaf Dirs:  ${bf} / ${nonleaf} = $( (echo -n "scale=4;"; echo ${bf} / ${nonleaf}) | bc -l)"
