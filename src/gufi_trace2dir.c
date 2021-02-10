@@ -129,25 +129,22 @@ int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) 
     /* parse the directory data */
     linetowork(w->line, w->len, in.delim, &dir);
 
-    /* create the directory */
+    /* combine the output directory with the current trace directory */
     char topath[MAXPATH];
     if (w->first_delim) {
-        SNFORMAT_S(topath, MAXPATH, 3, in.nameto, strlen(in.nameto), "/", (size_t) 1, dir.name, w->first_delim);
+        SNFORMAT_S(topath, MAXPATH, 2, in.nameto, in.nameto_len, dir.name, w->first_delim);
     }
     else {
-        SNFORMAT_S(topath, MAXPATH, 1, in.nameto, strlen(in.nameto));
+        SNFORMAT_S(topath, MAXPATH, 1, in.nameto, in.nameto_len);
     }
 
+    /* create the directory */
     if (dupdir(topath, &dir.statuso)) {
         const int err = errno;
         fprintf(stderr, "Dupdir failure: %s %d %s\n", topath, err, strerror(err));
         row_destroy(w);
         return 1;
     }
-
-    /* create the file name */
-    char filename[MAXPATH];
-    SNFORMAT_S(filename, MAXPATH, 2, topath, strlen(topath), "/" DBNAME, (size_t) (DBNAME_LEN + 1));
 
     /* move the trace file to the offet */
     fseek(trace, w->offset, SEEK_SET);
@@ -171,9 +168,20 @@ int processdir(struct QPTPool * ctx, const size_t id, void * data, void * args) 
         /*     break; */
         /* } */
 
+        /* overwrite old filename starting from the prefix */
+        /* (not starting from the current directory's path because */
+        /* each non-directory also contains the full path) */
+        SNFORMAT_S(topath + in.nameto_len, MAXPATH, 1, row.name, strlen(row.name));
+
+        /* all links become real files */
+        row.statuso.st_mode &= ~S_IFLNK;
+        row.statuso.st_mode |= S_IFREG;
+
         /* use mknod because tablefs doesn't support open/close */
-        /* ignore errors */
-        mknod(row.name, row.statuso.st_mode, S_IFREG); /* regular file even if the type is link */
+        if (mknod(topath, row.statuso.st_mode, 0) != 0) {
+            const int err = errno;
+            fprintf(stderr, "Could not mknod '%s' (type: %s): %s (%d)\n", topath, row.type, strerror(err), err);
+        }
     }
 
     row_destroy(w);
@@ -352,27 +360,16 @@ int main(int argc, char * argv[]) {
     if (idx < 0)
         return -1;
     else {
-        size_t offset = 0;
-
-        // figure out what path prefix to add
-        char *env_prefix = getenv("PRELOAD_Tablefs_path_prefix");
-        if (env_prefix) {
-            offset = SNFORMAT_S(in.nameto, MAXPATH, 1, env_prefix, strlen(env_prefix));
-        }
-        else {
-            const char default_prefix[] = "/tablefs";
-            offset = SNFORMAT_S(in.nameto, MAXPATH, 1, default_prefix, strlen(default_prefix));
-        }
-
-        // remove trailing slashes
-        while (offset && in.nameto[offset - 1] == '/') {
-            offset--;
-        }
-
         /* parse positional args, following the options */
         int retval = 0;
         INSTALL_STR(in.name,   argv[idx++], MAXPATH, "input_file");
-        INSTALL_STR(in.nameto, argv[idx++], MAXPATH, "output_dir");
+        in.name_len = strlen(in.name);
+
+        char nameto[MAXPATH];
+        INSTALL_STR(nameto, argv[idx++], MAXPATH, "output_dir");
+
+        /* make sure in.nameto is followed by a path separator */
+        in.nameto_len = SNFORMAT_S(in.nameto, MAXPATH, 2, nameto, strlen(nameto), "/", (size_t) 1);
 
         if (retval)
             return retval;

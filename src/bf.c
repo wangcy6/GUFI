@@ -331,10 +331,12 @@ int parse_cmd_line(int         argc,
 
       case 't':
          INSTALL_STR(in->nameto, optarg, MAXPATH, "-t");
+         in->nameto_len = strlen(in->nameto);
          break;
 
       case 'i':
          INSTALL_STR(in->name, optarg, MAXPATH, "-i");
+         in->name_len = strlen(in->name);
          break;
 
       case 'I':               // SQL initializations

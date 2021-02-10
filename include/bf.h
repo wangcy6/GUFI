@@ -146,6 +146,7 @@ struct input {
    char name[MAXPATH];
    size_t name_len;
    char nameto[MAXPATH];
+   size_t nameto_len;
    char sqltsum[MAXSQL];
    size_t sqltsum_len;
    char sqlsum[MAXSQL];
