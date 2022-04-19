@@ -120,7 +120,7 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
 
     /* get source directory xattrs */
     xattrs_setup(&work->xattrs);
-    if (in.xattrs.index) {
+    if (in.xattrs.enabled) {
         xattrs_get(work->name, &work->xattrs);
     }
 
@@ -185,7 +185,7 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
         }
 
         xattrs_setup(&e.xattrs);
-        if (in.xattrs.index) {
+        if (in.xattrs.enabled) {
             xattrs_get(e.name, &e.xattrs);
         }
 
