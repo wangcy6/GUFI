@@ -20,6 +20,7 @@ fi
 THREADS="1"
 BUILD_CXX="false"
 PARAMIKO="false"
+DUCKDB="false"
 
 # https://stackoverflow.com/a/14203146
 # Bruno Bronosky
@@ -38,6 +39,9 @@ case $key in
         ;;
     --paramiko)
         PARAMIKO="true"
+        ;;
+    --duckdb)
+        DUCKDB="true"
         ;;
     *)    # unknown option
         POSITIONAL+=("$1") # save it in an array for later
@@ -87,4 +91,9 @@ fi
 if [[ "${PARAMIKO}" == "true" ]]; then
     echo "Installing Paramiko"
     . ${SCRIPT_PATH}/paramiko.sh
+fi
+
+if [[ "${DUCKDB}" == "true" ]]; then
+    echo "Installing DuckDB"
+    . ${SCRIPT_PATH}/duckdb.sh
 fi

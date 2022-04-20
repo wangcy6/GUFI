@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0dbe711..3ff994e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -187,6 +187,8 @@ execute_process(
+         OUTPUT_VARIABLE GIT_ITERATION
+         OUTPUT_STRIP_TRAILING_WHITESPACE)
+ 
++set(GIT_RESULT 1)
++
+ if(GIT_RESULT EQUAL "0")
+   string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
+   string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")

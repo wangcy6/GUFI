@@ -211,6 +211,9 @@ endif()
 set(BIN "bin" CACHE PATH "Directory under \${CMAKE_INSTALL_PREFIX} to install binaries")
 set(LIB "lib" CACHE PATH "Directory under \${CMAKE_INSTALL_PREFIX} to install binaries")
 
+set(BACKING_DB "sqlite3" CACHE STRING "Backing database implementation")
+set_property(CACHE BACKING_DB PROPERTY STRINGS sqlite3 duckdb)
+
 # Need pthread
 find_package(Threads REQUIRED)
 
@@ -237,6 +240,10 @@ endif()
 if (CLIENT)
   set(DEP_OPTIONS ${DEP_OPTIONS} --paramiko)
 endif()
+if ("${BACKING_DB}" STREQUAL "duckdb")
+  set(DEP_OPTIONS ${DEP_OPTIONS} --duckdb)
+endif()
+
 add_custom_target(install_dependencies ALL COMMAND ${CMAKE_SOURCE_DIR}/contrib/deps/install_deps.sh ${DEP_OPTIONS} "${DEP_DOWNLOAD_PREFIX}" "${DEP_BUILD_PREFIX}" "${DEP_INSTALL_PREFIX}")
 
 # search for FUSE on Linux, or OSXFUSE on OSX
@@ -312,13 +319,19 @@ include_directories(${COMMON_INCLUDES})
 set(COMMON_LIBRARIES
   GUFI
   ${DEP_INSTALL_PREFIX}/sqlite3-pcre/libsqlite3-pcre.a
-  ${DEP_INSTALL_PREFIX}/sqlite3/lib/libsqlite3.a
   pcre
   Threads::Threads
   ${DEP_INSTALL_PREFIX}/jemalloc/lib/libjemalloc.a
   m
   dl
 )
+
+if ("${BACKING_DB}" STREQUAL "sqlite3")
+  list(APPEND COMMON_LIBRARIES ${DEP_INSTALL_PREFIX}/sqlite3/lib/libsqlite3.a)
+elseif ("${BACKING_DB}" STREQUAL "duckdb")
+  # the sqlite3 wrapper is not installed
+  list(APPEND COMMON_LIBRARIES ${DEP_BUILD_PREFIX}/duckdb-0.3.3/build/third_party/sqlite/libduckdb_sqlite3.a)
+endif()
 
 # enable "make test"
 enable_testing()
