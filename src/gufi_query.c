@@ -317,6 +317,7 @@ static size_t descend2(struct QPTPool *ctx,
                     buffered_start(set);
                     qwork.level = next_level;
                     qwork.root = passmywork->root;
+                    qwork.root_len = passmywork->root_len;
                     /* qwork.type[0] = 'd'; */
 
                     /* this is how the parent gets passed on */
@@ -583,7 +584,7 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
     #endif
 
     /* set up XATTRS_VIEW_NAME so that it can be used by -T, -S, and -E */
-    if (in.xattrs.enabled) {
+    if (db && in.xattrs.enabled) {
         timestamp_set_start(xattrprep_call);
         xattrprep(work->name, work->name_len, db
                   #if defined(DEBUG) && defined(CUMULATIVE_TIMES)
@@ -1058,6 +1059,7 @@ int main(int argc, char *argv[])
         }
 
         mywork->root = argv[i];
+        mywork->root_len = mywork->name_len;
 
         /* push the path onto the queue */
         QPTPool_enqueue(pool, i % in.maxthreads, processdir, mywork);
