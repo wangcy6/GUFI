@@ -850,9 +850,6 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
  * the per-thread databases reuse outdb array
  */
 static sqlite3 *aggregate_init(char *aggregate_name, size_t count) {
-    struct work work;
-    memset(&work, 0, sizeof(work));
-    work.level = -1;
     for(size_t i = 0; i < count; i++) {
         char intermediate_name[MAXSQL];
         SNPRINTF(intermediate_name, MAXSQL, AGGREGATE_NAME, (int) i);
@@ -868,7 +865,7 @@ static sqlite3 *aggregate_init(char *aggregate_name, size_t count) {
             return NULL;
         }
 
-        addqueryfuncs(gts.outdbd[i], i, &work);
+        addqueryfuncs(gts.outdbd[i], i, NULL);
 
         /* create table */
         if (sqlite3_exec(gts.outdbd[i], in.sqlinit, NULL, NULL, NULL) != SQLITE_OK) {
@@ -893,7 +890,7 @@ static sqlite3 *aggregate_init(char *aggregate_name, size_t count) {
         return NULL;
     }
 
-    addqueryfuncs(aggregate, count, &work);
+    addqueryfuncs(aggregate, count, NULL);
 
     /* create table */
     if (sqlite3_exec(aggregate, strlen(in.create_aggregate)?in.create_aggregate:in.sqlinit, NULL, NULL, NULL) != SQLITE_OK) {
@@ -1011,9 +1008,9 @@ int main(int argc, char *argv[])
     /* provide a function to print if PRINT is set */
     args.print_callback_func = ((in.show_results == PRINT)?print_callback:NULL);
     struct QPTPool *pool = QPTPool_init(in.maxthreads
-                                         #if defined(DEBUG) && defined(PER_THREAD_STATS)
-                                         , timestamp_buffers
-                                         #endif
+                                        #if defined(DEBUG) && defined(PER_THREAD_STATS)
+                                        , timestamp_buffers
+                                        #endif
         );
 
     if (!pool) {
