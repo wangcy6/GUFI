@@ -91,8 +91,7 @@ size_t total_files = 0;
 #endif
 
 static int process_nondir(struct work *entry, void *args) {
-    size_t *id = (size_t *) args;
-    worktofile(gts.outfd[*id], in.delim, in.name_len, entry);
+    worktofile((FILE *) args, in.delim, in.name_len, entry);
     return 0;
 }
 
@@ -117,6 +116,7 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
     /* } */
 
     struct work *work = (struct work *) data;
+    FILE **outfiles = (FILE **) args;
 
     DIR *dir = opendir(work->name);
     if (!dir) {
@@ -131,7 +131,7 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
     }
 
     /* write start of stanza */
-    worktofile(gts.outfd[id], in.delim, in.name_len, work);
+    worktofile(outfiles[id], in.delim, in.name_len, work);
 
     if (in.xattrs.enabled) {
         xattrs_cleanup(&work->xattrs);
@@ -140,10 +140,10 @@ int processdir(struct QPTPool *ctx, const size_t id, void *data, void *args) {
     size_t *nondirs_processed = NULL;
     #if BENCHMARK
     size_t nondirs_processed_benchmark = 0;
-    *nondirs_processed = &nondirs_processed_benchmark;
+    nondirs_processed = &nondirs_processed_benchmark;
     #endif
     descend(ctx, id, work, dir, processdir,
-            process_nondir, (void *) &id,
+            process_nondir, outfiles[id],
             NULL, NULL, nondirs_processed);
 
     closedir(dir);
@@ -267,7 +267,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    if (!outfiles_init(gts.outfd, in.outfile, in.outfilen, in.maxthreads)) {
+    FILE **outfiles = outfiles_init(in.outfile, in.outfilen, in.maxthreads);
+    if (!outfiles) {
+        free(root);
         return -1;
     }
 
@@ -283,11 +285,13 @@ int main(int argc, char *argv[]) {
         );
     if (!pool) {
         fprintf(stderr, "Failed to initialize thread pool\n");
+        free(root);
         return -1;
     }
 
-    if (QPTPool_start(pool, NULL) != (size_t) in.maxthreads) {
+    if (QPTPool_start(pool, outfiles) != (size_t) in.maxthreads) {
         fprintf(stderr, "Failed to start threads\n");
+        free(root);
         return -1;
     }
 
@@ -295,7 +299,7 @@ int main(int argc, char *argv[]) {
     QPTPool_wait(pool);
     QPTPool_destroy(pool);
 
-    outfiles_fin(gts.outfd, in.maxthreads);
+    outfiles_fin(outfiles, in.maxthreads);
 
     #if BENCHMARK
     clock_gettime(CLOCK_MONOTONIC, &benchmark.end);
