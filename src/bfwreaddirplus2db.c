@@ -336,7 +336,7 @@ static int processdir(struct QPTPool * ctx, const size_t id, void * data, void *
     }
 
     /* if we are not looking for suspect directories we should just put the directory at the top of all the dirents */
-    if (in.outdb > 0) {
+    if (in.output == OUTDB) {
          if (in.insertdir > 0) {
            if (in.suspectmethod == 0) {
              todb=id;
@@ -372,7 +372,7 @@ static int processdir(struct QPTPool * ctx, const size_t id, void * data, void *
          }
     }
 
-    if (in.outfile > 0) {
+    if (in.output == OUTFILE) {
       tooutfile=id;
       if (in.stride > 0) {
         tooutfile=(passmywork->statuso.st_ino/in.stride)%in.maxthreads; //striping inodes
@@ -431,7 +431,7 @@ static int processdir(struct QPTPool * ctx, const size_t id, void * data, void *
 */
           /* if suspect method is not zero then we can insert files and links, if not we dont care about files and links in db */
           if (in.suspectmethod == 0) {
-            if (in.outdb > 0) {
+            if (in.output == OUTDB) {
               if (in.insertfl > 0) {
                 todb=id;
                 if (in.stride > 0) {
@@ -474,7 +474,7 @@ static int processdir(struct QPTPool * ctx, const size_t id, void * data, void *
               if (st.st_mtime >= locsuspecttime) passmywork->suspect=1;
             }
           }
-          if (in.outfile > 0) {
+          if (in.output == OUTFILE) {
             tooutfile=id;
             if (in.stride > 0) {
               tooutfile=(qwork.statuso.st_ino/in.stride)%in.maxthreads; //striping inodes
@@ -494,7 +494,7 @@ static int processdir(struct QPTPool * ctx, const size_t id, void * data, void *
 
     /* if we are not looking for suspect directories we should just put the directory at the top of all the dirents */
     if (in.suspectmethod > 0) {
-      if (in.outdb > 0) {
+      if (in.output == OUTFILE) {
          if (in.insertdir > 0) {
            todb=id;
            if (in.stride > 0) {
@@ -514,7 +514,7 @@ static int processdir(struct QPTPool * ctx, const size_t id, void * data, void *
       }
     }
 
-    if (in.outdb > 0) {
+    if (in.output == OUTDB) {
       if (in.stride == 0) {
         todb=id;
         stopdb(gts.outdbd[todb]);
@@ -609,10 +609,10 @@ int processinit(struct QPTPool * ctx) {
        fclose(isf);
      }
 
-     if (in.outdb > 0) {
+     if (in.output == OUTDB) {
        i=0;
        while (i < in.maxthreads) {
-           SNPRINTF(outdbn,MAXPATH,"%s.%d",in.outdbn,i);
+           SNPRINTF(outdbn,MAXPATH,"%s.%d",in.outname,i);
            gts.outdbd[i]=opendb(outdbn, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 1, 1
                                 , create_readdirplus_tables, NULL
                                 #if defined(DEBUG) && defined(PER_THREAD_STATS)
@@ -631,11 +631,11 @@ int processinit(struct QPTPool * ctx) {
      }
 
      //open up the output files if needed
-     if (in.outfile > 0) {
+     if (in.output == OUTFILE) {
        i=0;
        while (i < in.maxthreads) {
-         SNPRINTF(outfn,MAXPATH,"%s.%d",in.outfilen,i);
-         //fprintf(stderr,"init opening %s.%d",in.outfilen,i);
+         SNPRINTF(outfn,MAXPATH,"%s.%d",in.outname,i);
+         //fprintf(stderr,"init opening %s.%d",in.outname,i);
          gts.outfd[i]=fopen(outfn,"w");
          if (in.stride > 0) {
            if (pthread_mutex_init(&outfile_mutex[i], NULL) != 0) {
@@ -670,7 +670,7 @@ int processfin() {
 int i;
 
      // close output dbs here
-     if (in.outdb > 0) {
+     if (in.output == OUTDB) {
        i=0;
        while (i < in.maxthreads) {
          insertdbfin(global_res[i]);
@@ -683,7 +683,7 @@ int i;
      }
 
      // close outputfiles
-     if (in.outfile > 0) {
+     if (in.output == OUTFILE) {
        i=0;
        while (i < in.maxthreads) {
          fclose(gts.outfd[i]);
