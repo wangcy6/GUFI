@@ -71,10 +71,12 @@ OF SUCH DAMAGE.
 #include "OutputBuffers.h"
 #include "bf.h"
 #include "debug.h"
+#include "gufi_query/CompiledStmtCache.h"
 
 typedef struct ThreadArgs {
     char dbname[MAXPATH];
     sqlite3 *outdb;                    /* either user named or in-memory */
+    CSC_t csc;                         /* compiled statement cache point to db */
     FILE *outfile;                     /* always points to STDOUT or a user defined file */
     struct OutputBuffer output_buffer; /* only used when outputting to STDOUT or OUTFILE */
 

@@ -67,6 +67,8 @@ OF SUCH DAMAGE.
 
 #include <sqlite3.h>
 
-int get_rollupscore(const char *name, sqlite3 *db, int *rollupscore);
+#include "gufi_query/CompiledStmtCache.h"
+
+int get_rollupscore(sqlite3 *db, sqlite3_stmt **stmt, int *rollupscore);
 
 #endif

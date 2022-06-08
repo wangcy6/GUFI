@@ -62,105 +62,21 @@ OF SUCH DAMAGE.
 
 
 
-#include <stdlib.h>
-
-#include "dbutils.h"
 #include "gufi_query/CompiledStmtCache.h"
-#include "gufi_query/PoolArgs.h"
-#include "utils.h"
 
-int PoolArgs_init(PoolArgs_t *pa, struct input *in) {
-    /* if (!pa || !in) { */
-    /*     return -1; */
-    /* } */
+void compiled_stmt_fin(CSC_t *csc) {
+    sqlite3_finalize(csc->intermediate);
+    sqlite3_finalize(csc->ent);
+    sqlite3_finalize(csc->sum);
+    sqlite3_finalize(csc->rollupscore);
+    sqlite3_finalize(csc->tsum);
+    sqlite3_finalize(csc->tsum_exists);
 
-    memset(pa, 0, sizeof(*pa));
-    pa->in = in;
-    pa->ta = calloc(in->maxthreads, sizeof(ThreadArgs_t));
-    /* if (!pa->ta) { */
-    /*     return -1; */
-    /* } */
+    sqlite3_finalize(csc->xattrs.drop_xattrs);
+    sqlite3_finalize(csc->xattrs.create_xsummary);
+    sqlite3_finalize(csc->xattrs.create_xpentries);
+    sqlite3_finalize(csc->xattrs.create_xentries);
+    sqlite3_finalize(csc->xattrs.db_list);
 
-    size_t i = 0;
-    for(; i < (size_t) in->maxthreads; i++) {
-        ThreadArgs_t *ta = &(pa->ta[i]);
-
-        /* only create per-thread db files when not aggregating and outputting to OUTDB */
-        if (!in->sql.init_agg_len && (in->output == OUTDB)) {
-            SNPRINTF(ta->dbname, MAXPATH, "%s.%zu", in->outname, i);
-        }
-        else {
-            SNPRINTF(ta->dbname, MAXPATH, "file:memory%zu?mode=memory&cache=shared", i);
-        }
-
-        ta->outdb = opendb(ta->dbname, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 1, 1, NULL, NULL
-                           #if defined(DEBUG) && defined(PER_THREAD_STATS)
-                           , NULL, NULL
-                           , NULL, NULL
-                           #endif
-            );
-
-        if (!ta->outdb) {
-            fprintf(stderr, "Error: Could not open in-memory database file\n");
-            break;
-        }
-
-        #ifdef ADDQUERYFUNCS
-        if (addqueryfuncs_common(ta->outdb) != 0) {
-            fprintf(stderr, "Could not add functions to sqlite\n");
-        }
-        #endif
-
-        /* run -I */
-        if (in->sql.init_len) {
-            if (sqlite3_exec(ta->outdb, in->sql.init, NULL, NULL, NULL) != SQLITE_OK) {
-                fprintf(stderr, "Error: Could not run SQL Init \"%s\" on %s\n", in->sql.init, ta->dbname);
-                break;
-            }
-        }
-
-        ta->outfile = stdout;
-
-        /* write to per-thread files during walk - aggregation is handled outside */
-        if (in->output == OUTFILE) {
-            if (!in->sql.init_agg_len) {
-                char outname[MAXPATH];
-                SNPRINTF(outname, MAXPATH, "%s.%zu", in->outname, i);
-                ta->outfile = fopen(outname, "w");
-                if (!ta->outfile) {
-                    fprintf(stderr, "Error: Could not open output file");
-                    break;
-                }
-            }
-        }
-
-        if (!OutputBuffer_init(&ta->output_buffer, in->output_buffer_size)) {
-            break;
-        }
-    }
-
-    if (i != (size_t) in->maxthreads) {
-        PoolArgs_fin(pa, i + 1);
-        return 1;
-    }
-
-    return 0;
-}
-
-void PoolArgs_fin(PoolArgs_t *pa, const size_t allocated) {
-    for(size_t i = 0; i < allocated; i++) {
-        ThreadArgs_t *ta = &(pa->ta[i]);
-
-        compiled_stmt_fin(&ta->csc);
-        closedb(ta->outdb);
-
-        OutputBuffer_flush(&ta->output_buffer, ta->outfile);
-        OutputBuffer_destroy(&ta->output_buffer);
-
-        if (pa->in->output == OUTFILE) {
-            fclose(ta->outfile);
-        }
-    }
-
-    free(pa->ta);
+    memset(csc, 0, sizeof(*csc));
 }
